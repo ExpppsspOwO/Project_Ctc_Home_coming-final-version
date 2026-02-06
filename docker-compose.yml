@@ -1,0 +1,108 @@
+services:
+  # Service ของ Backend (NodeJS/Express)
+  backend:
+    build: ./backend # สร้าง Image จาก Dockerfile ในโฟลเดอร์ backend
+    container_name: ctc-home-coming-backend
+    ports:
+      - "5000:5000" #Map port 5000 ของเครื่องเรากับ Port 5000 ใน Container
+    volumes:
+      - ./backend:/app # Mount โฟลเดอร์ backend ของเราเข้าไปใน /app ของ Container
+      - /app/node_modules # ไม่ mount node_modules เพื่อใช้ที่ติดตั้งใน container
+    env_file:
+      - ./backend/.env  # อ่านค่า Environment Varibles จากไฟล์ .env
+    depends_on:
+      - mongo # ให้รอจนกว่า service 'mongo' จะพร้อมใช้งาน
+    # restart: unless-stopped # (แนะนำให้เพิ่ม)
+    restart: always
+
+  # Service ของ Frontend (React)
+  frontend:
+    build: ./frontend # สร้าง Image จาก Dockerfile ในโฟลเดอร์ frontend
+    container_name: ctc-home-coming-frontend
+    ports:
+      - "5173:5173" # Map port 5173 ของเครื่องเรากับ port 5173 ใน Container
+    volumes:
+      - ./frontend:/app # Mount โฟลเดอร์ frontend เพื่อให้ Hot-reload ทำงาน
+      - /app/node_modules
+    depends_on:
+      - backend # รอให้ backend พร้อมทำงานก่อน
+    # restart: unless-stopped # (แนะนำให้เพิ่ม)
+
+  # Service ของ ฐานข้อมูล (Data Base)
+  mongo:
+    image: mongo:7.0 # ใช้official Image ของ MongoDB
+    container_name: ctc-home-coming-db
+    # 👇 เพิ่มบรรทัดนี้ครับ! สำคัญมากสำหรับ Transaction
+    command: ["--replSet", "haru_urara", "--bind_ip_all"]
+    ports:
+      - "27017:27017" # Map port 27017 (Default ของ Mongo)
+    volumes:  
+      - mongo-data:/data/db # สร้าง Volume ขื่อ 'mongo-data' เพื่อเก็บข้อมูลถาวร
+    env_file:
+      - ./backend/.env
+    # environment:
+    #   MONGO_INITDB_ROOT_USERNAME: admin_haru_urara7851365   # ⬅️ ตั้ง User ของ DB (อย่าใช้ @)
+    #   MONGO_INITDB_ROOT_PASSWORD: admin123     # ⬅️ ตั้ง Pass ของ DB
+    restart: unless-stopped # (แนะนำให้เพิ่ม)
+  
+  mongo-express:
+    image: mongo-express
+    container_name: ctc-home-coming-mongo-express
+    restart: unless-stopped
+    ports:
+      - "8081:8081" # เปิดหน้า Mongo Express ผ่าน localhost:8081
+    environment:
+    #User/Pass สำหรับ "เข้าหน้าเว็บ"
+      ME_CONFIG_BASICAUTH_USERNAME: haru_urara7851365    # ⬅️ User เข้าเว็บ
+      ME_CONFIG_BASICAUTH_PASSWORD: admin123  # ⬅️ Pass เข้าเว็บ
+      ME_CONFIG_MONGODB_SERVER: mongo
+      ME_CONFIG_MONGODB_PORT: 27017
+      #User/Pass สำหรับ "เชื่อมต่อ DB" (ต้องตรงกับข้างบน)
+      # ME_CONFIG_MONGODB_ADMINUSERNAME: admin_haru_urara7851365
+      # ME_CONFIG_MONGODB_ADMINPASSWORD: admin123
+    depends_on:
+      - mongo
+
+  n8n:
+    image: n8nio/n8n:1.68.0 # ใช้official Image ของ n8n
+    container_name: ctc-home-coming-n8n
+    ports:
+      - "5678:5678"         # Map port 5678 ของเครื่องเรากับ port 5678 ใน Container
+    environment:
+      - GENERIC_TIMEZONE=Asia/Bangkok
+      - WEBHOOK_URL=http://localhost:5678/
+      # 👇 ตั้งรหัสอะไรก็ได้ยาวๆ ผสมตัวเลขตัวอักษร (ห้ามทำหายนะ!)
+      - N8N_ENCRYPTION_KEY=haru_urara7851365key
+    # 👇 เพิ่มบรรทัดนี้: ให้ Container ทำงานด้วยสิทธิ์ root จะได้เขียนไฟล์ลงโฟลเดอร์เราได้ไม่มีปัญหา
+    # user: root
+    volumes:
+      - ./n8n_data:/home/node/.n8n    # เก็บ workflow/config ของ n8n ไว้ในโฟรเดอร์
+    depends_on:
+      - backend # รอให้ backend พร้อมทำงานก่อน
+    restart: unless-stopped # (แนะนำให้เพิ่ม)
+
+  mongo-init:
+    image: mongo:7.0
+    container_name: ctc-home-coming-mongo-init
+    depends_on:
+      - mongo
+    restart: "no"
+    command:
+      - bash
+      - -c
+      - |
+        echo "⏳ Waiting for MongoDB..."
+        until mongosh --host mongo --eval 'quit(db.runCommand({ ping: 1 }).ok ? 0 : 2)' &>/dev/null; do
+          sleep 2
+        done
+        
+        echo "🔍 Checking Replica Set status..."
+        # เช็คก่อนว่า Init ไปหรือยัง? ถ้ายังค่อยทำ
+        mongosh --host mongo --eval 'try { rs.status().ok } catch (e) { rs.initiate({ _id: "haru_urara", members: [{ _id: 0, host: "mongo:27017" }] }) }'
+        
+        echo "🎉 MongoDB is ready!"
+
+
+# กำหนด Volumes ที่จะใช้
+volumes:
+  mongo-data:

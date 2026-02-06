@@ -1,0 +1,45 @@
+@import "tailwindcss";
+@custom-variant dark (&:where(.dark, .dark *));
+
+/* ✅ Reset ค่าพื้นฐานให้สะอาด */
+html, body, #root {
+  height: 100%;
+  width: 100%;
+  margin: 0;
+  padding: 0;
+  overflow: hidden; /* ให้ MainLayout จัดการ Scroll เอง */
+  font-family: 'Prompt', sans-serif;
+  @apply bg-gray-50;
+}
+
+/* ✅ ป้องกันทุก Element ล้น (ใช้ 100% แทน 100vw) */
+* {
+  box-sizing: border-box;
+  min-width: 0; /* แก้ปัญหา Flexbox ดันล้น */
+}
+
+/* แก้ Animation ของ Tailwind ให้ไม่ดันจอ */
+[data-framer-motion] {
+  max-width: 100%;
+  overflow-x: clip; /* ตัดส่วนเกินทิ้งทันที */
+}
+
+/* ธีมและ Animation */
+@theme {
+  --animate-shake: shake 0.4s ease-in-out;
+  @keyframes shake {
+    0%, 100% { transform: translateX(0); }
+    10%, 30%, 50%, 70%, 90% { transform: translateX(-4px); }
+    20%, 40%, 60%, 80% { transform: translateX(4px); }
+  }
+}
+
+/* แก้ Autofill สีเพี้ยน */
+input:-webkit-autofill,
+input:-webkit-autofill:hover, 
+input:-webkit-autofill:focus, 
+input:-webkit-autofill:active {
+    -webkit-box-shadow: 0 0 0 30px white inset !important;
+    -webkit-text-fill-color: black !important;
+    transition: background-color 5000s ease-in-out 0s;
+}

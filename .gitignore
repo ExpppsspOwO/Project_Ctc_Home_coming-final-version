@@ -1,0 +1,16 @@
+# กันไฟล์ขยะของ System
+.DS_Store
+Thumbs.db
+
+# กันโฟลเดอร์นรก (สำคัญมาก ห้ามลืม!)
+node_modules/
+**/node_modules/
+dist/
+build/
+
+# กันไฟล์ Log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+logs/
+*.log
