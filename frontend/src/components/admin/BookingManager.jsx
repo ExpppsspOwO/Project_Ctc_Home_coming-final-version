@@ -14,9 +14,9 @@ const BookingManager = () => {
   const [tables, setTables] = useState([]);
   const [loading, setLoading] = useState(true);
   const [previewImage, setPreviewImage] = useState(null);
+  const [userRole, setUserRole] = useState(''); // ✅ State เก็บ Role
 
   // Filter & Search
-  // ✅ เพิ่ม Tab 'payment_failed'
   const [historyTab, setHistoryTab] = useState('verified'); 
   const [searchTerm, setSearchTerm] = useState('');
 
@@ -28,14 +28,13 @@ const BookingManager = () => {
   // Action Modal
   const [actionModal, setActionModal] = useState({
     isOpen: false,
-    type: null, // 'approve', 'cancel', 'edit'
+    type: null, 
     bookingId: null,
     data: null
   });
 
-  // State for Reject/Cancel Options
-  // ✅ เพิ่ม State สำหรับเลือกว่าจะ ยกเลิกถาวร หรือ แค่ปฏิเสธสลิป
-  const [cancelType, setCancelType] = useState('cancelled'); // 'cancelled' | 'payment_failed'
+  // Cancel/Reject Type
+  const [cancelType, setCancelType] = useState('cancelled'); 
 
   // State for Edit Form
   const [editData, setEditData] = useState({
@@ -51,7 +50,24 @@ const BookingManager = () => {
   useEffect(() => {
     fetchBookings();
     fetchTables();
+    checkUserRole(); // ✅ เรียกฟังก์ชันเช็ค Role
   }, []);
+
+  // ✅ ฟังก์ชันแกะ Role จาก Token
+  const checkUserRole = () => {
+    const token = localStorage.getItem('token');
+    if (token) {
+      try {
+        const base64Url = token.split('.')[1];
+        const base64 = base64Url.replace(/-/g, '+').replace(/_/g, '/');
+        const jsonPayload = decodeURIComponent(atob(base64).split('').map(c => '%' + ('00' + c.charCodeAt(0).toString(16)).slice(-2)).join(''));
+        const decoded = JSON.parse(jsonPayload);
+        setUserRole(decoded.user?.role || '');
+      } catch (e) {
+        console.error("Error decoding token", e);
+      }
+    }
+  };
 
   const getSlipUrl = (filename) => {
     if (!filename) return null;
@@ -110,7 +126,6 @@ const BookingManager = () => {
       });
     }
 
-    // Reset Cancel Type to default 'cancelled'
     setCancelType('cancelled');
 
     setActionModal({
@@ -153,13 +168,12 @@ const BookingManager = () => {
           return;
         }
         
-        // ✅ ส่งค่า status ไปด้วย (cancelled หรือ payment_failed)
         const res = await fetch(`${API_BASE_URL}/bookings/cancel/${bookingId}`, {
           method: 'PUT',
           headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' },
           body: JSON.stringify({ 
               remark: remark,
-              status: cancelType // ส่งค่านี้ไปให้ Backend ตัดสินใจคืนโต๊ะหรือไม่
+              status: cancelType 
           })
         });
         if (!res.ok) throw new Error('Failed to update status');
@@ -229,7 +243,6 @@ const BookingManager = () => {
   };
 
   // --- Filter Logic ---
-  // ✅ 1. เพิ่ม payment_failed เข้าไปในรายการรอตรวจสอบ (เพื่อให้ Admin เห็นและกด Cancel/Reject ได้)
   const pendingBookings = bookings.filter(b => 
       b.status === 'pending' || 
       b.status === 'waiting_verify' || 
@@ -237,10 +250,9 @@ const BookingManager = () => {
   );
 
   const historyBookings = bookings.filter(b => {
-    // ✅ 2. Logic แยก Tab
     let statusMatch = false;
     if (historyTab === 'verified') statusMatch = (b.status === 'verified' || b.status === 'paid');
-    else if (historyTab === 'payment_failed') statusMatch = (b.status === 'payment_failed'); // Tab ใหม่
+    else if (historyTab === 'payment_failed') statusMatch = (b.status === 'payment_failed');
     else statusMatch = (b.status === 'cancelled' || b.status === 'rejected');
     
     if (!statusMatch) return false;
@@ -261,7 +273,7 @@ const BookingManager = () => {
   return (
     <div className="w-full space-y-8 pb-20">
 
-      {/* --- Section 1: Pending Items (รวม Failed) --- */}
+      {/* --- Section 1: Pending Items --- */}
       <div>
         <h2 className="text-xl font-bold text-gray-800 dark:text-white mb-4 flex items-center gap-2">⏳ รายการรอตรวจสอบ ({pendingBookings.length})</h2>
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
@@ -277,12 +289,11 @@ const BookingManager = () => {
                     </h3>
                     <p className="text-gray-500 dark:text-slate-400 text-xs">Zone: {booking.tables?.[0]?.tableNumber?.charAt(0) || '-'}</p>
                   </div>
-                  {/* ✅ Badge Status Update */}
                   <span className={`px-2 py-1 rounded text-xs font-bold 
                   ${booking.status === 'waiting_verify'
                       ? 'bg-indigo-100 text-indigo-700 dark:bg-indigo-900/30 dark:text-indigo-300'
                       : booking.status === 'payment_failed'
-                        ? 'bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-300' // สีแดงสำหรับ Failed
+                        ? 'bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-300'
                         : 'bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400'
                     }`}>
                     {booking.status === 'waiting_verify' ? 'รอตรวจสอบสลิป' 
@@ -295,7 +306,6 @@ const BookingManager = () => {
                   <p>💰 <span className="font-bold text-gray-900 dark:text-white">{(booking.totalPrice || booking.table?.price || 0).toLocaleString()} บ.</span></p>
                   <p>👤 {booking.user?.username}</p>
                   
-                  {/* ถ้าเป็น Failed ให้โชว์เหตุผลด้วย */}
                   {booking.status === 'payment_failed' && (
                       <div className="text-xs text-red-500 bg-red-50 dark:bg-red-900/10 p-2 rounded border border-red-100 dark:border-red-800">
                           ⚠️ {booking.remark}
@@ -310,7 +320,6 @@ const BookingManager = () => {
                 </div>
 
                 <div className="flex gap-2 mt-auto">
-                  {/* ปุ่ม Cancel จะเปิด Modal ให้เลือกว่าจะ Reject หรือ Cancel ถาวร */}
                   <button onClick={() => openActionModal('cancel', booking)} className="flex-1 py-2 bg-red-50 dark:bg-red-900/20 text-red-600 dark:text-red-400 rounded-lg hover:bg-red-100 dark:hover:bg-red-900/40 text-sm font-bold transition">ยกเลิก/ไม่อนุมัติ</button>
                   <button onClick={() => openActionModal('approve', booking)} className="flex-1 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg text-sm font-bold shadow-sm transition">อนุมัติ</button>
                 </div>
@@ -327,27 +336,30 @@ const BookingManager = () => {
             <h2 className="text-xl font-bold text-gray-800 dark:text-white flex items-center gap-2">
               📜 ประวัติการดำเนินการ
             </h2>
-            <button
-              onClick={toggleDeleteMode}
-              className={`flex items-center gap-2 px-3 py-1.5 rounded-full text-xs font-bold transition-all border ${isDeleteMode
-                ? 'bg-red-50 dark:bg-red-900/20 text-red-600 dark:text-red-400 border-red-200 dark:border-red-800 shadow-sm'
-                : 'bg-white dark:bg-slate-800 text-gray-500 dark:text-slate-400 border-gray-200 dark:border-slate-700 hover:bg-gray-50 dark:hover:bg-slate-700'
-                }`}
-            >
-              {isDeleteMode ? <X size={14} /> : <Eraser size={14} />}
-              <span>{isDeleteMode ? 'ยกเลิก' : 'ล้างประวัติ'}</span>
-            </button>
+            
+            {/* ✅ เช็ค Role: ถ้าเป็น Officer จะไม่แสดงปุ่มนี้ */}
+            {userRole !== 'officer' && (
+              <button
+                onClick={toggleDeleteMode}
+                className={`flex items-center gap-2 px-3 py-1.5 rounded-full text-xs font-bold transition-all border ${isDeleteMode
+                  ? 'bg-red-50 dark:bg-red-900/20 text-red-600 dark:text-red-400 border-red-200 dark:border-red-800 shadow-sm'
+                  : 'bg-white dark:bg-slate-800 text-gray-500 dark:text-slate-400 border-gray-200 dark:border-slate-700 hover:bg-gray-50 dark:hover:bg-slate-700'
+                  }`}
+              >
+                {isDeleteMode ? <X size={14} /> : <Eraser size={14} />}
+                <span>{isDeleteMode ? 'ยกเลิก' : 'ล้างประวัติ'}</span>
+              </button>
+            )}
+
           </div>
 
           <div className="flex flex-col sm:flex-row gap-3 w-full lg:w-auto overflow-x-auto pb-2 sm:pb-0">
-            {/* ✅ Filter Tabs (3 Tabs) */}
             <div className="bg-gray-100 dark:bg-slate-800 p-1 rounded-lg flex shrink-0">
               <button onClick={() => setHistoryTab('verified')} disabled={isDeleteMode} className={`px-4 py-2 rounded-md text-sm font-bold transition-all ${historyTab === 'verified' ? 'bg-white dark:bg-slate-700 text-emerald-600 dark:text-emerald-400 shadow-sm' : 'text-gray-500 dark:text-slate-400'}`}>อนุมัติแล้ว ✅</button>
               <button onClick={() => setHistoryTab('payment_failed')} disabled={isDeleteMode} className={`px-4 py-2 rounded-md text-sm font-bold transition-all ${historyTab === 'payment_failed' ? 'bg-white dark:bg-slate-700 text-amber-600 dark:text-amber-400 shadow-sm' : 'text-gray-500 dark:text-slate-400'}`}>ชำระไม่ผ่าน ⚠️</button>
               <button onClick={() => setHistoryTab('cancelled')} disabled={isDeleteMode} className={`px-4 py-2 rounded-md text-sm font-bold transition-all ${historyTab === 'cancelled' ? 'bg-white dark:bg-slate-700 text-red-600 dark:text-red-400 shadow-sm' : 'text-gray-500 dark:text-slate-400'}`}>ยกเลิกแล้ว 🗑️</button>
             </div>
             
-            {/* Search */}
             <div className="relative w-full sm:w-56">
               <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 dark:text-slate-500 w-4 h-4" />
               <input type="text" placeholder="ค้นหา..." value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} className="pl-9 pr-4 py-2 bg-white dark:bg-slate-800 border border-gray-200 dark:border-slate-700 rounded-lg text-sm text-gray-800 dark:text-white focus:ring-2 focus:ring-blue-500 outline-none w-full shadow-sm placeholder-gray-400 dark:placeholder-slate-500" />
@@ -431,8 +443,7 @@ const BookingManager = () => {
         </div>
       </div>
 
-
-      {/* --- Floating Bottom Action Bar & Bulk Modal --- */}
+      {/* ... (Footer Action Bar & Modal เหมือนเดิม) ... */}
       <AnimatePresence>
         {isDeleteMode && selectedIds.length > 0 && (
           <motion.div initial={{ y: 100 }} animate={{ y: 0 }} exit={{ y: 100 }} className="fixed bottom-6 left-1/2 -translate-x-1/2 z-40 bg-gray-900 dark:bg-slate-700 text-white px-6 py-3 rounded-full shadow-2xl flex items-center gap-6">
@@ -451,8 +462,8 @@ const BookingManager = () => {
           </motion.div>
         )}
       </AnimatePresence>
-
-      {/* --- Main Action Modal (Approve / Cancel / Edit) --- */}
+      
+      {/* ... (Action Modal & Preview Image เหมือนเดิม) ... */}
       <AnimatePresence>
         {actionModal.isOpen && (
           <motion.div
@@ -460,6 +471,7 @@ const BookingManager = () => {
             className="fixed inset-0 bg-black/60 flex items-center justify-center z-[9999] backdrop-blur-sm p-4 items-end sm:items-center"
             onClick={closeActionModal}
           >
+            {/* ... Modal Content (เหมือนเดิม) ... */}
             <motion.div
               initial={{ scale: 0.95, opacity: 0, y: 20 }}
               animate={{ scale: 1, opacity: 1, y: 0 }}
@@ -467,7 +479,6 @@ const BookingManager = () => {
               onClick={(e) => e.stopPropagation()}
               className="bg-white dark:bg-slate-900 rounded-t-2xl sm:rounded-2xl shadow-2xl w-full max-w-md overflow-hidden relative flex flex-col max-h-[90vh]"
             >
-              {/* Header */}
               <div className={`p-4 border-b dark:border-slate-800 flex justify-between items-center shrink-0 ${actionModal.type === 'cancel' ? 'bg-red-50 dark:bg-red-900/20' :
                   actionModal.type === 'approve' ? 'bg-emerald-50 dark:bg-emerald-900/20' : 'bg-blue-50 dark:bg-blue-900/20'
                 }`}>
@@ -481,15 +492,10 @@ const BookingManager = () => {
                 <button onClick={closeActionModal} className="p-1 hover:bg-black/5 dark:hover:bg-white/10 rounded-full text-gray-500 dark:text-slate-400"><X size={20} /></button>
               </div>
 
-              {/* Body (Scrollable) */}
               <div className="p-6 overflow-y-auto custom-scrollbar bg-white dark:bg-slate-900">
-
-                {/* --- CASE: Cancel / Reject --- */}
                 {actionModal.type === 'cancel' && (
                   <div className="space-y-4">
                     <p className="text-gray-600 dark:text-slate-300 text-sm">เลือกการดำเนินการสำหรับ <span className="font-bold text-gray-800 dark:text-white">{actionModal.data?.user?.username}</span></p>
-                    
-                    {/* ✅ ตัวเลือก Radio Button */}
                     <div className="flex flex-col gap-2">
                         <label className={`flex items-center gap-3 p-3 rounded-xl border cursor-pointer transition-all ${cancelType === 'cancelled' ? 'bg-red-50 border-red-200 dark:bg-red-900/20 dark:border-red-800' : 'border-gray-200 dark:border-slate-700'}`}>
                             <input type="radio" name="cancelType" value="cancelled" checked={cancelType === 'cancelled'} onChange={() => setCancelType('cancelled')} className="accent-red-500 w-4 h-4" />
@@ -498,7 +504,6 @@ const BookingManager = () => {
                                 <span className="block text-xs text-gray-500 dark:text-slate-400">โต๊ะจะว่างทันทีและลูกค้าต้องจองใหม่</span>
                             </div>
                         </label>
-                        
                         <label className={`flex items-center gap-3 p-3 rounded-xl border cursor-pointer transition-all ${cancelType === 'payment_failed' ? 'bg-amber-50 border-amber-200 dark:bg-amber-900/20 dark:border-amber-800' : 'border-gray-200 dark:border-slate-700'}`}>
                             <input type="radio" name="cancelType" value="payment_failed" checked={cancelType === 'payment_failed'} onChange={() => setCancelType('payment_failed')} className="accent-amber-500 w-4 h-4" />
                             <div>
@@ -507,132 +512,65 @@ const BookingManager = () => {
                             </div>
                         </label>
                     </div>
-
                     <textarea value={remark} onChange={(e) => setRemark(e.target.value)} placeholder="ระบุสาเหตุ (จำเป็น)..." className="w-full p-3 border dark:border-slate-600 rounded-xl outline-none focus:ring-2 focus:ring-red-200 resize-none h-24 text-sm bg-white dark:bg-slate-800 dark:text-white" autoFocus />
                   </div>
                 )}
 
-                {/* --- CASE: Edit & Move Table --- */}
                 {actionModal.type === 'edit' && (
                   <div className="space-y-6">
-
-                    {/* 1. ข้อมูลผู้จอง */}
                     <div className="bg-gray-50 dark:bg-slate-800 p-4 rounded-xl space-y-3 border border-gray-100 dark:border-slate-700">
                       <h4 className="text-xs font-bold text-gray-400 uppercase tracking-wider">ข้อมูลผู้ติดต่อ</h4>
-
                       <div className="grid grid-cols-1 gap-3">
                         <div>
                           <label className="block text-xs font-bold text-gray-700 dark:text-slate-300 mb-1">ชื่อผู้จอง</label>
-                          <input
-                            type="text"
-                            value={editData.username}
-                            onChange={(e) => setEditData({ ...editData, username: e.target.value })}
-                            className="w-full p-2 border dark:border-slate-600 rounded-lg bg-white dark:bg-slate-700 focus:ring-2 focus:ring-blue-200 outline-none text-sm text-gray-900 dark:text-white"
-                          />
+                          <input type="text" value={editData.username} onChange={(e) => setEditData({ ...editData, username: e.target.value })} className="w-full p-2 border dark:border-slate-600 rounded-lg bg-white dark:bg-slate-700 focus:ring-2 focus:ring-blue-200 outline-none text-sm text-gray-900 dark:text-white" />
                         </div>
                         <div className="grid grid-cols-2 gap-3">
-                          <div>
-                            <label className="block text-xs font-bold text-gray-700 dark:text-slate-300 mb-1 flex items-center gap-1"><Phone size={12} /> เบอร์โทร</label>
-                            <input
-                              type="text"
-                              value={editData.phone}
-                              onChange={(e) => setEditData({ ...editData, phone: e.target.value })}
-                              className="w-full p-2 border dark:border-slate-600 rounded-lg bg-white dark:bg-slate-700 focus:ring-2 focus:ring-blue-200 outline-none text-sm text-gray-900 dark:text-white"
-                              placeholder="-"
-                            />
-                          </div>
-                          <div>
-                            <label className="block text-xs font-bold text-gray-700 dark:text-slate-300 mb-1 flex items-center gap-1"><Mail size={12} /> Email</label>
-                            <input
-                              type="text"
-                              value={editData.email}
-                              onChange={(e) => setEditData({ ...editData, email: e.target.value })}
-                              className="w-full p-2 border dark:border-slate-600 rounded-lg bg-white dark:bg-slate-700 focus:ring-2 focus:ring-blue-200 outline-none text-sm text-gray-900 dark:text-white"
-                              placeholder="-"
-                            />
-                          </div>
+                          <div><label className="block text-xs font-bold text-gray-700 dark:text-slate-300 mb-1 flex items-center gap-1"><Phone size={12} /> เบอร์โทร</label><input type="text" value={editData.phone} onChange={(e) => setEditData({ ...editData, phone: e.target.value })} className="w-full p-2 border dark:border-slate-600 rounded-lg bg-white dark:bg-slate-700 focus:ring-2 focus:ring-blue-200 outline-none text-sm text-gray-900 dark:text-white" placeholder="-" /></div>
+                          <div><label className="block text-xs font-bold text-gray-700 dark:text-slate-300 mb-1 flex items-center gap-1"><Mail size={12} /> Email</label><input type="text" value={editData.email} onChange={(e) => setEditData({ ...editData, email: e.target.value })} className="w-full p-2 border dark:border-slate-600 rounded-lg bg-white dark:bg-slate-700 focus:ring-2 focus:ring-blue-200 outline-none text-sm text-gray-900 dark:text-white" placeholder="-" /></div>
                         </div>
                       </div>
                     </div>
-
-                    {/* 2. จัดการโต๊ะ (Multi-Table) */}
                     <div>
                       <h4 className="text-xs font-bold text-gray-400 uppercase tracking-wider mb-2">จัดการโต๊ะที่จอง ({editData.tableMappings.length} โต๊ะ)</h4>
-
                       <div className="space-y-3">
                         {editData.tableMappings.map((mapping, index) => (
                           <div key={index} className="flex items-center gap-2 bg-blue-50/50 dark:bg-blue-900/10 p-2 rounded-lg border border-blue-100 dark:border-blue-800">
-                            {/* โต๊ะเดิม */}
-                            <div className="shrink-0 w-12 h-10 bg-white dark:bg-slate-800 rounded border dark:border-slate-600 flex items-center justify-center font-bold text-gray-600 dark:text-white shadow-sm text-sm">
-                              {mapping.label}
-                            </div>
-
+                            <div className="shrink-0 w-12 h-10 bg-white dark:bg-slate-800 rounded border dark:border-slate-600 flex items-center justify-center font-bold text-gray-600 dark:text-white shadow-sm text-sm">{mapping.label}</div>
                             <ArrowRight size={16} className="text-blue-300" />
-
-                            {/* เลือกโต๊ะใหม่ */}
-                            <select
-                              value={mapping.newTableId}
-                              onChange={(e) => handleTableChange(index, e.target.value)}
-                              className={`flex-1 p-2 border rounded-lg outline-none text-sm font-bold transition dark:bg-slate-700 dark:text-white ${mapping.newTableId !== mapping.originalId
-                                  ? 'bg-blue-100 text-blue-700 border-blue-300 dark:bg-blue-900/50 dark:text-blue-200 dark:border-blue-500'
-                                  : 'bg-white text-gray-700 dark:border-slate-600'
-                                }`}
-                            >
-                              <option value={mapping.originalId}>
-                                {mapping.label} (ปัจจุบัน)
-                              </option>
+                            <select value={mapping.newTableId} onChange={(e) => handleTableChange(index, e.target.value)} className={`flex-1 p-2 border rounded-lg outline-none text-sm font-bold transition dark:bg-slate-700 dark:text-white ${mapping.newTableId !== mapping.originalId ? 'bg-blue-100 text-blue-700 border-blue-300 dark:bg-blue-900/50 dark:text-blue-200 dark:border-blue-500' : 'bg-white text-gray-700 dark:border-slate-600'}`}>
+                              <option value={mapping.originalId}>{mapping.label} (ปัจจุบัน)</option>
                               <optgroup label="--- เปลี่ยนเป็นโต๊ะว่าง ---">
-                                {tables.filter(t => t.status === 'available').map(t => (
-                                  <option key={t._id} value={t._id}>
-                                    {t.tableNumber} (โซน {t.zone})
-                                  </option>
-                                ))}
+                                {tables.filter(t => t.status === 'available').map(t => (<option key={t._id} value={t._id}>{t.tableNumber} (โซน {t.zone})</option>))}
                               </optgroup>
                             </select>
                           </div>
                         ))}
                       </div>
-                      <p className="text-[10px] text-gray-400 mt-2 text-center">
-                        * สามารถเปลี่ยนโต๊ะได้ทีละรายการตามจำนวนที่จองไว้
-                      </p>
+                      <p className="text-[10px] text-gray-400 mt-2 text-center">* สามารถเปลี่ยนโต๊ะได้ทีละรายการตามจำนวนที่จองไว้</p>
                     </div>
-
                   </div>
                 )}
 
-                {/* --- CASE: Approve --- */}
                 {actionModal.type === 'approve' && (
                   <div className="text-center py-4">
                     <div className="w-16 h-16 bg-emerald-100 dark:bg-emerald-900/30 text-emerald-600 dark:text-emerald-400 rounded-full flex items-center justify-center mx-auto mb-2"><Check size={32} /></div>
                     <p className="text-gray-700 dark:text-slate-300 font-medium">ยืนยันการอนุมัติยอดเงิน?</p>
                   </div>
                 )}
-
               </div>
 
-              {/* Footer Buttons */}
               <div className="p-4 bg-gray-50 dark:bg-slate-800 flex gap-3 justify-end shrink-0 border-t dark:border-slate-700">
                 <button onClick={closeActionModal} className="px-4 py-2 text-gray-600 dark:text-slate-300 font-bold hover:bg-gray-200 dark:hover:bg-slate-700 rounded-lg transition text-sm">ยกเลิก</button>
                 <button onClick={handleConfirmAction} className={`px-6 py-2 text-white font-bold rounded-lg shadow-lg transition active:scale-95 flex items-center gap-2 text-sm ${actionModal.type === 'cancel' ? 'bg-red-600 hover:bg-red-700' : actionModal.type === 'approve' ? 'bg-emerald-600 hover:bg-emerald-700' : 'bg-blue-600 hover:bg-blue-700'}`}>
                   {actionModal.type === 'edit' && <Save size={16} />} ยืนยัน
                 </button>
               </div>
-
             </motion.div>
           </motion.div>
         )}
       </AnimatePresence>
-
-      <AnimatePresence>
-        {previewImage && (
-          <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="fixed inset-0 bg-black/90 z-[9999] flex items-center justify-center p-4 backdrop-blur-sm" onClick={() => setPreviewImage(null)}>
-            <div className="relative inline-block shadow-2xl rounded-lg overflow-hidden" onClick={e => e.stopPropagation()}>
-              <button onClick={() => setPreviewImage(null)} className="absolute top-3 right-3 z-50 p-1.5 bg-black/50 text-white rounded-full"><X size={20} /></button>
-              <motion.img src={previewImage} initial={{ scale: 0.95 }} animate={{ scale: 1 }} className="block max-w-full max-h-[85vh] object-contain bg-gray-100" />
-            </div>
-          </motion.div>
-        )}
-      </AnimatePresence>
+      <AnimatePresence>{previewImage && (<motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="fixed inset-0 bg-black/90 z-[9999] flex items-center justify-center p-4 backdrop-blur-sm" onClick={() => setPreviewImage(null)}><div className="relative inline-block shadow-2xl rounded-lg overflow-hidden" onClick={e => e.stopPropagation()}><button onClick={() => setPreviewImage(null)} className="absolute top-3 right-3 z-50 p-1.5 bg-black/50 text-white rounded-full"><X size={20} /></button><motion.img src={previewImage} initial={{ scale: 0.95 }} animate={{ scale: 1 }} className="block max-w-full max-h-[85vh] object-contain bg-gray-100" /></div></motion.div>)}</AnimatePresence>
     </div>
   );
 };

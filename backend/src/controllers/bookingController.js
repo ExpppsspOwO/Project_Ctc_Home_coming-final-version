@@ -130,7 +130,7 @@ const cancelReservation = async (req, res) => {
         if (!booking) throw new Error('ไม่พบรายการจอง');
 
         // เช็คสิทธิ์: ต้องเป็นเจ้าของ หรือ Admin เท่านั้น
-        if (userRole !== 'admin' && booking.user.toString() !== userId) {
+       if (userRole !== 'admin' && userRole !== 'officer' && booking.user.toString() !== userId) {
             throw new Error('ไม่มีสิทธิ์ยกเลิก');
         }
 

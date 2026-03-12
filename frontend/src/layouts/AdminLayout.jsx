@@ -1,11 +1,10 @@
-// src/layouts/AdminLayout.jsx
 import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useNavigate, useLocation, Outlet } from 'react-router-dom';
 import {
     Calendar, Users, LayoutGrid, Settings, LogOut,
     ChevronLeft, ChevronRight, Menu, X, Home, ShoppingBag, Package,
-    ChevronDown, Table // ✅ 1. เพิ่มไอคอน Table
+    ChevronDown, Table
 } from 'lucide-react';
 import SessionExpiredToast from '../components/SessionExpiredToast';
 
@@ -22,6 +21,7 @@ const checkTokenValidity = () => {
     if (decoded.exp * 1000 < Date.now()) {
         return { valid: false, reason: 'expired' };
     }
+    // ✅ Return Role กลับไปด้วย
     return { valid: true, role: decoded.user.role };
   } catch (error) {
     return { valid: false, reason: 'invalid' };
@@ -33,8 +33,8 @@ const MENU_GROUPS = [
         title: 'EVENT MANAGEMENT',
         items: [
             { id: 'bookings', label: 'รายการจอง', icon: Calendar },
-            { id: 'zones', label: 'สร้างผังที่นั่ง', icon: LayoutGrid }, // ✅ อันเดิม (ZoneGenerator) ยังอยู่
-            { id: 'TableManager', label: 'จัดการข้อมูลโต๊ะ', icon: Table }, // ✅ 2. เพิ่มอันใหม่ (TableManager)
+            { id: 'zones', label: 'สร้างผังที่นั่ง', icon: LayoutGrid },
+            { id: 'TableManager', label: 'จัดการข้อมูลโต๊ะ', icon: Table },
         ]
     },
     {
@@ -133,9 +133,10 @@ const MenuItem = ({ item, isCollapsed, isActive, onClick }) => {
     );
 };
 
-const MenuList = ({ isCollapsed, activeTab, onMenuClick, onLogout, onNavigate }) => (
+// ✅ ปรับ MenuList ให้รับ prop 'menuGroups' แทนการใช้ constant
+const MenuList = ({ menuGroups, isCollapsed, activeTab, onMenuClick, onLogout, onNavigate }) => (
     <nav className="flex flex-col w-full mt-4 pb-4">
-        {MENU_GROUPS.map((group, index) => (
+        {menuGroups.map((group, index) => (
             <MenuGroup
                 key={index} group={group} isCollapsed={isCollapsed}
                 activeTab={activeTab} onMenuClick={onMenuClick}
@@ -154,18 +155,18 @@ const MenuList = ({ isCollapsed, activeTab, onMenuClick, onLogout, onNavigate })
     </nav>
 );
 
-const AdminDashboard = () => {
+const AdminDashboard = () => { // ชื่อ Component จริงๆ คือ AdminLayout
     const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
     const [isDesktopSidebarOpen, setIsDesktopSidebarOpen] = useState(true);
     const navigate = useNavigate();
     const location = useLocation();
 
     const [sessionExpired, setSessionExpired] = useState(false);
+    const [userRole, setUserRole] = useState(''); // ✅ เพิ่ม state สำหรับ Role
 
     const [isMobile, setIsMobile] = useState(window.innerWidth < 768);
     const [isTablet, setIsTablet] = useState(window.innerWidth >= 768 && window.innerWidth < 1024);
     
-    // ดึง active tab จาก URL (ถ้าเข้า /dashboard/TableManager -> activeTab = TableManager)
     const activeTab = location.pathname.split('/').pop() || 'bookings';
 
     useEffect(() => {
@@ -205,6 +206,9 @@ const AdminDashboard = () => {
                  const status = checkTokenValidity();
                  if (!status.valid) {
                      handleSessionExpired();
+                 } else {
+                     // ✅ เซ็ต Role เข้า state
+                     setUserRole(status.role);
                  }
              }
         };
@@ -214,6 +218,18 @@ const AdminDashboard = () => {
         const interval = setInterval(validate, 60000); 
         return () => clearInterval(interval);
     }, [location]);
+
+    // ✅ ฟังก์ชันกรองเมนู
+    const visibleMenuGroups = MENU_GROUPS.map(group => ({
+        ...group,
+        items: group.items.filter(item => {
+            // เงื่อนไข: ถ้าเป็น officer ห้ามเห็น settings
+            if (userRole === 'officer' && item.id === 'settings') {
+                return false;
+            }
+            return true;
+        })
+    })).filter(group => group.items.length > 0);
 
     const getPageTitle = () => {
         const allItems = MENU_GROUPS.flatMap(g => g.items);
@@ -257,7 +273,8 @@ const AdminDashboard = () => {
                                 </button>
                             </div>
                             <div className="flex-1 overflow-y-auto">
-                                <MenuList isCollapsed={false} activeTab={activeTab} onMenuClick={handleMenuClick} onLogout={handleLogout} onNavigate={navigate} />
+                                {/* ✅ ส่ง visibleMenuGroups ที่กรองแล้วไปแสดงผล */}
+                                <MenuList menuGroups={visibleMenuGroups} isCollapsed={false} activeTab={activeTab} onMenuClick={handleMenuClick} onLogout={handleLogout} onNavigate={navigate} />
                             </div>
                         </motion.aside>
                     </>
@@ -300,7 +317,8 @@ const AdminDashboard = () => {
                     ) : <div className="w-10 h-10 bg-blue-500 rounded-lg flex items-center justify-center"><span className="text-white font-bold text-sm">CT</span></div>}
                 </div>
                 <div className="flex-1 overflow-y-auto no-scrollbar">
-                    <MenuList isCollapsed={!isDesktopSidebarOpen} activeTab={activeTab} onMenuClick={handleMenuClick} onLogout={handleLogout} onNavigate={navigate} />
+                    {/* ✅ ส่ง visibleMenuGroups ที่กรองแล้วไปแสดงผล */}
+                    <MenuList menuGroups={visibleMenuGroups} isCollapsed={!isDesktopSidebarOpen} activeTab={activeTab} onMenuClick={handleMenuClick} onLogout={handleLogout} onNavigate={navigate} />
                 </div>
                 <div className="p-0 border-t border-gray-200 dark:border-slate-800 shrink-0">
                     <button onClick={() => setIsDesktopSidebarOpen(!isDesktopSidebarOpen)} className="w-full flex items-center justify-center gap-2 px-4 py-4 hover:bg-gray-50 dark:hover:bg-slate-800 transition-all text-gray-500 dark:text-slate-400 hover:text-gray-900 dark:hover:text-white">
@@ -334,4 +352,4 @@ const AdminDashboard = () => {
     );
 };
 
-export default AdminDashboard;
+export default AdminDashboard; // (จริงๆควรชื่อ AdminLayout)

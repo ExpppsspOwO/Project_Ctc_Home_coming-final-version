@@ -16,15 +16,15 @@ router.post('/upload-avatar', protect, upload.single('avatar'), usersController.
 
 // --- Admin Zone ---
 // 1. ดึงรายชื่อทั้งหมด
-router.get('/', protect, checkRole('admin'), authController.getAllUsers);
+router.get('/', protect, checkRole('admin','officer'), authController.getAllUsers);
 
 // 2. เพิ่ม User
-router.post('/', protect, checkRole('admin'), authController.createUser);
+router.post('/', protect, checkRole('admin','officer'), authController.createUser);
 
 // 3. แก้ไข User
-router.put('/:id', protect, checkRole('admin'), authController.updateUser);
+router.put('/:id', protect, checkRole('admin','officer'), authController.updateUser);
 
 // 4. ลบ User
-router.delete('/:id', protect, checkRole('admin'), authController.deleteUser);
+router.delete('/:id', protect, checkRole('admin','officer'), authController.deleteUser);
 
 module.exports = router;

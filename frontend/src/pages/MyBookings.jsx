@@ -438,36 +438,71 @@ const MyBookings = () => {
             {/* Modals: Upload & Cancel */}
             <AnimatePresence>
                 {selectedBooking && (
-                    <motion.div className="fixed inset-0 bg-slate-900/60 flex items-center justify-center z-[60] p-4" onClick={closeModal}>
-                        <motion.div className="bg-white dark:bg-slate-900 rounded-[2rem] w-full max-w-sm overflow-hidden" onClick={e => e.stopPropagation()}>
-                            <div className="bg-slate-50 px-6 py-4 border-b flex justify-between items-center">
-                                {/* เปลี่ยนชื่อหัวข้อ */}
-                                <h3 className={`text-lg font-bold flex items-center gap-2 ${selectedBooking.status === 'payment_failed' ? 'text-red-600' : 'text-slate-800'}`}>
+                    <motion.div 
+                        initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
+                        className="fixed inset-0 bg-slate-900/60 dark:bg-black/80 flex items-center justify-center z-[60] p-4 backdrop-blur-sm" 
+                        onClick={closeModal}
+                    >
+                        <motion.div 
+                            initial={{ scale: 0.9, y: 20 }} animate={{ scale: 1, y: 0 }} exit={{ scale: 0.9, y: 20 }}
+                            className="bg-white dark:bg-slate-900 rounded-[2rem] w-full max-w-sm overflow-hidden shadow-2xl" 
+                            onClick={e => e.stopPropagation()}
+                        >
+                            <div className="bg-slate-50 dark:bg-slate-800 px-6 py-4 border-b border-slate-100 dark:border-slate-700 flex justify-between items-center">
+                                <h3 className={`text-lg font-bold flex items-center gap-2 ${selectedBooking.status === 'payment_failed' ? 'text-red-600' : 'text-slate-800 dark:text-white'}`}>
                                     <CreditCard size={20} />
                                     {selectedBooking.status === 'payment_failed' ? 'แก้ไขหลักฐานการโอน' : 'แจ้งชำระเงิน'}
                                 </h3>
-                                <button onClick={closeModal}><X size={20} /></button>
+                                <button onClick={closeModal} className="p-1 rounded-full hover:bg-black/5 dark:hover:bg-white/10 text-slate-500 dark:text-slate-400"><X size={20} /></button>
                             </div>
                             
                             <div className="p-6">
-                                <div className="bg-blue-50 p-4 rounded-2xl mb-6 text-center">
-                                     <p className="text-slate-500 text-xs font-bold uppercase">ยอดที่ต้องโอน</p>
-                                     <p className="text-3xl font-black text-blue-600">฿{(selectedBooking.totalPrice || 0).toLocaleString()}</p>
+                                {/* 🔥 ส่วนที่เพิ่มมา: รายละเอียดบัญชีธนาคาร 🔥 */}
+                                <div className={`p-4 rounded-2xl border mb-6 text-center ${selectedBooking.status === 'payment_failed' ? 'bg-red-50 dark:bg-red-900/20 border-red-100 dark:border-red-900/50' : 'bg-emerald-50 dark:bg-emerald-900/20 border-emerald-100 dark:border-emerald-800'}`}>
+                                    <p className="text-xs text-slate-500 dark:text-slate-400 mb-1 font-bold uppercase">โอนเงินเข้าบัญชี</p>
+                                    <p className="font-bold text-slate-800 dark:text-white">{config.payment?.bank || 'ธนาคาร...'}</p>
+                                    <p className="text-sm text-slate-600 dark:text-slate-300 mb-2">{config.payment?.accountName || 'ชื่อบัญชี...'}</p>
+                                    <div
+                                        onClick={() => copyToClipboard(config.payment?.accountNumber)}
+                                        className="bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl py-2 px-3 flex items-center justify-center gap-2 cursor-pointer hover:bg-slate-50 dark:hover:bg-slate-700 transition active:scale-95"
+                                    >
+                                        <span className="font-mono text-xl font-black text-slate-700 dark:text-white tracking-wider">{config.payment?.accountNumber || '000-0-00000-0'}</span>
+                                        <Copy size={16} className="text-slate-400" />
+                                    </div>
                                 </div>
 
-                                <label className="block w-full border-2 border-dashed rounded-xl h-48 flex flex-col items-center justify-center cursor-pointer mb-4">
+                                {/* ส่วนแสดงยอดเงิน */}
+                                <div className="text-center mb-6">
+                                     <p className="text-slate-400 dark:text-slate-500 text-xs font-bold uppercase">ยอดที่ต้องโอน</p>
+                                     <p className={`text-4xl font-black mt-1 ${selectedBooking.status === 'payment_failed' ? 'text-red-600' : 'text-blue-600 dark:text-blue-400'}`}>
+                                        ฿{(selectedBooking.totalPrice || 0).toLocaleString()}
+                                     </p>
+                                </div>
+
+                                {/* ส่วนอัปโหลดรูป */}
+                                <label className={`block w-full aspect-video border-2 border-dashed rounded-xl flex flex-col items-center justify-center cursor-pointer transition mb-4 overflow-hidden relative
+                                            ${filePreview
+                                    ? 'border-emerald-500 bg-emerald-50 dark:bg-emerald-900/20'
+                                    : 'border-slate-300 dark:border-slate-600 hover:border-emerald-400 hover:bg-slate-50 dark:hover:bg-slate-800'}`}>
                                     <input type="file" accept="image/*" onChange={handleFileChange} className="hidden" />
                                     {file && filePreview ? (
-                                        <img src={filePreview} className="h-full object-contain" />
+                                        <img src={filePreview} className="absolute inset-0 w-full h-full object-contain bg-slate-100 dark:bg-slate-900" />
                                     ) : (
                                         <div className="text-center text-slate-400">
                                             <Upload size={24} className="mx-auto mb-2"/>
-                                            <span>แตะเพื่ออัปโหลด</span>
+                                            <span className="text-sm font-bold">แตะเพื่ออัปโหลดสลิป</span>
                                         </div>
                                     )}
                                 </label>
 
-                                <button onClick={handleUpload} disabled={!file || uploading} className={`w-full py-4 rounded-xl font-bold text-white ${selectedBooking.status === 'payment_failed' ? 'bg-red-600 hover:bg-red-700' : 'bg-blue-600 hover:bg-blue-700'}`}>
+                                <button 
+                                    onClick={handleUpload} 
+                                    disabled={!file || uploading} 
+                                    className={`w-full py-3.5 rounded-xl font-bold text-white shadow-lg transition disabled:opacity-50 disabled:shadow-none
+                                        ${selectedBooking.status === 'payment_failed' 
+                                            ? 'bg-red-600 hover:bg-red-700 shadow-red-200' 
+                                            : 'bg-blue-600 hover:bg-blue-700 shadow-blue-200'}`}
+                                >
                                     {uploading ? <Loader2 className="animate-spin mx-auto"/> : (selectedBooking.status === 'payment_failed' ? 'ยืนยันการส่งใหม่' : 'ยืนยันการโอนเงิน')}
                                 </button>
                             </div>
